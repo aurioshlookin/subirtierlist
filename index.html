@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracker de Evolução - Tier List</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #121212; color: #e0e0e0; }
+        .tier-S { background-color: #ff7f7f; color: #000; font-weight: bold; }
+        .tier-A { background-color: #ffbf7f; color: #000; font-weight: bold; }
+        .tier-B { background-color: #ffff7f; color: #000; font-weight: bold; }
+        .tier-C { background-color: #7fff7f; color: #000; font-weight: bold; }
+        .tier-D { background-color: #7fbfff; color: #000; font-weight: bold; }
+        .tier-E { background-color: #7f7fff; color: #fff; font-weight: bold; }
+        .tier-ESP { background-color: #ff7fff; color: #000; font-weight: bold; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #666; }
+
+        input[type="text"] {
+            transition: all 0.3s ease;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 1px #3b82f6;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 font-sans">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 bg-gray-900 p-6 rounded-xl shadow-lg border border-gray-800">
+            <div>
+                <h1 class="text-3xl font-bold text-white mb-2"><i class="fas fa-chart-line text-blue-500 mr-3"></i>Tracker de Evolução</h1>
+                <p class="text-gray-400">Meta de vitórias consecutivas: 1x1 (3), 2x2 (2), 3x3 (1).</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center gap-4">
+                <div id="auth-status" class="flex items-center gap-2 text-sm text-yellow-500 bg-yellow-500/10 px-4 py-2 rounded-full border border-yellow-500/20">
+                    <i class="fas fa-spinner fa-spin"></i> Verificando autenticação...
+                </div>
+                <button id="login-btn" onclick="toggleLoginModal(true)" class="hidden text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full transition-colors shadow-lg">
+                    <i class="fas fa-sign-in-alt"></i> Entrar
+                </button>
+                <button id="logout-btn" onclick="handleLogout()" class="hidden text-sm bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-full transition-colors shadow-lg">
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </button>
+                <div id="save-status" class="hidden text-sm text-green-500 bg-green-500/10 px-4 py-2 rounded-full border border-green-500/20 transition-opacity duration-300">
+                    <i class="fas fa-check-circle"></i> Salvo
+                </div>
+            </div>
+        </header>
+
+        <!-- Container de Login (MODAL) -->
+        <div id="login-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden backdrop-blur-sm">
+            <div class="bg-gray-900 p-6 rounded-xl border border-gray-700 w-full max-w-sm shadow-2xl relative">
+                <button onclick="toggleLoginModal(false)" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+                <h2 class="text-xl font-bold text-white mb-4 text-center"><i class="fas fa-lock text-blue-500 mr-2"></i> Acesso Restrito</h2>
+                <form onsubmit="event.preventDefault();" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Email</label>
+                        <input type="email" id="auth-email" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Senha (mín. 6 caracteres)</label>
+                        <input type="password" id="auth-password" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5" required>
+                    </div>
+                    <div id="auth-error-msg" class="hidden text-sm text-red-500 bg-red-500/10 p-2 rounded border border-red-500/20"></div>
+                    <div class="flex gap-3 pt-2">
+                        <button onclick="window.handleLogin()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">Entrar</button>
+                        <button onclick="window.handleRegister()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors">Registrar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Container para as tabelas -->
+        <div id="tables-container" class="space-y-12">
+            <!-- As tabelas serão geradas aqui pelo JavaScript -->
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Configuração do Firebase
+        const userConfig = {
+            apiKey: "AIzaSyBeP4HT3i5qdtcQfpWGO2ROH2Nc6qkb8FA",
+            authDomain: "subirtierlist.firebaseapp.com",
+            projectId: "subirtierlist",
+            storageBucket: "subirtierlist.firebasestorage.app",
+            messagingSenderId: "199322295654",
+            appId: "1:199322295654:web:309d1010add5e93ea83ca7",
+            measurementId: "G-J076MS3WWC"
+        };
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userConfig;
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const envAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        let currentUser = null;
+        let userData = {};
+        let saveTimeout = null;
+        let isFirstLoad = true;
+        let unsubscribeSnapshot = null;
+
+        // Estrutura de dados dos jogadores
+        const playersData = [
+            // ACIMA
+            { section: 'Acima de Auriosh', tier: 'S', class: 'tier-S', name: 'MACIEL' },
+            { section: 'Acima de Auriosh', tier: 'S', class: 'tier-S', name: 'SYNESIS' },
+            { section: 'Acima de Auriosh', tier: 'S-', class: 'tier-S', name: 'IZUNA' },
+            { section: 'Acima de Auriosh', tier: 'S-', class: 'tier-S', name: 'HEROI' },
+            { section: 'Acima de Auriosh', tier: 'A', class: 'tier-A', name: 'XIMPA' },
+            { section: 'Acima de Auriosh', tier: 'A', class: 'tier-A', name: 'RAZZAK' },
+            { section: 'Acima de Auriosh', tier: 'A', class: 'tier-A', name: 'HISUY' },
+            { section: 'Acima de Auriosh', tier: 'A', class: 'tier-A', name: 'MAJIN' },
+            { section: 'Acima de Auriosh', tier: 'A', class: 'tier-A', name: 'KING' },
+            { section: 'Acima de Auriosh', tier: 'A-', class: 'tier-A', name: 'QIY' },
+            { section: 'Acima de Auriosh', tier: 'A-', class: 'tier-A', name: 'GLUT SEM LAG' },
+            { section: 'Acima de Auriosh', tier: 'A-', class: 'tier-A', name: 'NENE' },
+            { section: 'Acima de Auriosh', tier: 'A-', class: 'tier-A', name: 'GOLLA' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'GUINHO' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'HOMEM SAPO' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'PRADO' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'GLUT COM LAG' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'HIBARI' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'TX.' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'VORUNA' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'MAI' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'MINERVA' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'ACQUA' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'KROS' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'MTS' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'TINICK' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'JANETE' },
+            { section: 'Acima de Auriosh', tier: 'B', class: 'tier-B', name: 'SYNOX' },
+            { section: 'Acima de Auriosh', tier: 'B-', class: 'tier-B', name: 'WINTER' },
+            { section: 'Acima de Auriosh', tier: 'B-', class: 'tier-B', name: 'HORO HORO' },
+            { section: 'Acima de Auriosh', tier: 'B-', class: 'tier-B', name: 'ICER (HISUY DA SHOPEE)' },
+            { section: 'Acima de Auriosh', tier: 'B-', class: 'tier-B', name: 'POSEIDAS' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'SYRUST' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'DAKOTINHA' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'HASSAN FEMEA' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'SARYN' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'PLUSH' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'ASPAS' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'SEGUEOLIDER' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'NEEDLE' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'TITA' },
+            { section: 'Acima de Auriosh', tier: 'C', class: 'tier-C', name: 'LOGOS' },
+            { section: 'Acima de Auriosh', tier: 'C-', class: 'tier-C', name: 'BIELL BOLHA TENSA' },
+            { section: 'Acima de Auriosh', tier: 'C-', class: 'tier-C', name: 'TAINT' },
+            { section: 'Acima de Auriosh', tier: 'C-', class: 'tier-C', name: 'GOJO' },
+            { section: 'Acima de Auriosh', tier: 'C-', class: 'tier-C', name: 'ALRIC' },
+
+            // MESMO NÍVEL
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'BILBO' },
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'THEUZIN' },
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'GAUCHO' },
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'HAGANETSU' },
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'AURIOSH' }, // Adicionado o Auriosh aqui!
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'RAVENY' },
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'GOODNIGHT' },
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'IGHI' },
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'HASH' },
+
+            // ABAIXO
+            { section: 'Abaixo de Auriosh', tier: 'D-', class: 'tier-D', name: 'SANSHI' },
+            { section: 'Abaixo de Auriosh', tier: 'D-', class: 'tier-D', name: 'ITATE UCHIHA' },
+            { section: 'Abaixo de Auriosh', tier: 'E', class: 'tier-E', name: 'AIRIY' },
+            { section: 'Abaixo de Auriosh', tier: 'E', class: 'tier-E', name: 'DADMILO' },
+            { section: 'Abaixo de Auriosh', tier: 'E', class: 'tier-E', name: 'MALBORO RED' },
+            { section: 'Abaixo de Auriosh', tier: 'E', class: 'tier-E', name: 'YARA' },
+            { section: 'Abaixo de Auriosh', tier: 'E', class: 'tier-E', name: 'MURKY' },
+            { section: 'Abaixo de Auriosh', tier: 'E', class: 'tier-E', name: 'AL HABIB' },
+            { section: 'Abaixo de Auriosh', tier: 'E', class: 'tier-E', name: 'VZBRO' },
+            { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'MILLION' },
+            { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'PREFEITO' },
+            { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'SHISHIO' },
+            { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'ASSASSINO' },
+            { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'TUCSON (TEM DOWN)' },
+        ];
+
+        const sections = {
+            'Acima de Auriosh': playersData.filter(p => p.section === 'Acima de Auriosh'),
+            'Mesmo Nível': playersData.filter(p => p.section === 'Mesmo Nível'),
+            'Abaixo de Auriosh': playersData.filter(p => p.section === 'Abaixo de Auriosh')
+        };
+
+        const modeGoals = { '1x1': 3, '2x2': 2, '3x3': 1 };
+
+        window.toggleLoginModal = (show) => {
+            const modal = document.getElementById('login-modal');
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        };
+
+        // Funções de Autenticação (Email/Senha)
+        window.handleLogin = async () => {
+            const email = document.getElementById('auth-email').value;
+            const pass = document.getElementById('auth-password').value;
+            const errEl = document.getElementById('auth-error-msg');
+            errEl.classList.add('hidden');
+
+            if(!email || !pass) {
+                errEl.innerText = "Preencha email e senha.";
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                await signInWithEmailAndPassword(auth, email, pass);
+                document.getElementById('auth-email').value = '';
+                document.getElementById('auth-password').value = '';
+            } catch(error) {
+                errEl.innerText = "Erro ao entrar: Verifique suas credenciais.";
+                errEl.classList.remove('hidden');
+                console.error(error);
+            }
+        };
+
+        window.handleRegister = async () => {
+            const email = document.getElementById('auth-email').value;
+            const pass = document.getElementById('auth-password').value;
+            const errEl = document.getElementById('auth-error-msg');
+            errEl.classList.add('hidden');
+
+            if(!email || !pass) {
+                errEl.innerText = "Preencha email e senha.";
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            if(pass.length < 6) {
+                errEl.innerText = "A senha deve ter pelo menos 6 caracteres.";
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                await createUserWithEmailAndPassword(auth, email, pass);
+                document.getElementById('auth-email').value = '';
+                document.getElementById('auth-password').value = '';
+            } catch(error) {
+                if(error.code === 'auth/email-already-in-use') {
+                    errEl.innerText = "Este email já está em uso.";
+                } else {
+                    errEl.innerText = "Erro ao registrar.";
+                }
+                errEl.classList.remove('hidden');
+                console.error(error);
+            }
+        };
+
+        window.handleLogout = async () => {
+            if (unsubscribeSnapshot) {
+                unsubscribeSnapshot();
+                unsubscribeSnapshot = null;
+            }
+            await signOut(auth);
+            userData = {};
+        };
+
+        // Removido o login automático. O usuário precisará logar manualmente.
+        const initAuth = async () => {
+            // Apenas para inicialização estrutural. Firebase persiste sessão se já existir.
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            const statusEl = document.getElementById('auth-status');
+            const logoutBtn = document.getElementById('logout-btn');
+            const loginBtn = document.getElementById('login-btn');
+
+            if (user) {
+                statusEl.innerHTML = `<i class="fas fa-user-check"></i> ${user.email || 'Usuário logado'}`;
+                statusEl.className = "flex items-center gap-2 text-sm text-green-500 bg-green-500/10 px-4 py-2 rounded-full border border-green-500/20";
+                logoutBtn.classList.remove('hidden');
+                loginBtn.classList.add('hidden');
+                window.toggleLoginModal(false);
+                loadData();
+            } else {
+                statusEl.innerHTML = '<i class="fas fa-lock"></i> Somente Leitura';
+                statusEl.className = "flex items-center gap-2 text-sm text-gray-400 bg-gray-800 px-4 py-2 rounded-full border border-gray-700";
+                logoutBtn.classList.add('hidden');
+                loginBtn.classList.remove('hidden');
+                userData = {}; 
+                if (unsubscribeSnapshot) {
+                    unsubscribeSnapshot();
+                    unsubscribeSnapshot = null;
+                }
+                renderUI(); 
+            }
+        });
+
+        initAuth();
+
+        function loadData() {
+            if (!currentUser) return;
+            
+            const docRef = doc(db, 'artifacts', envAppId, 'users', currentUser.uid, 'tracker', 'stats');
+            
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
+
+            unsubscribeSnapshot = onSnapshot(docRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    userData = snapshot.data();
+                } else {
+                    userData = {};
+                }
+                
+                if (isFirstLoad) {
+                    renderUI();
+                    isFirstLoad = false;
+                } else {
+                    updateUIValues();
+                }
+            }, (error) => {
+                console.error("Erro ao escutar dados:", error);
+            });
+        }
+
+        function saveToFirebase() {
+            if (!currentUser) return;
+
+            const statusEl = document.getElementById('save-status');
+            statusEl.classList.remove('hidden');
+            statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+            statusEl.className = "flex items-center gap-2 text-sm text-yellow-500 bg-yellow-500/10 px-4 py-2 rounded-full border border-yellow-500/20";
+
+            if (saveTimeout) clearTimeout(saveTimeout);
+
+            saveTimeout = setTimeout(async () => {
+                try {
+                    const docRef = doc(db, 'artifacts', envAppId, 'users', currentUser.uid, 'tracker', 'stats');
+                    await setDoc(docRef, userData, { merge: true });
+                    
+                    statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Salvo';
+                    statusEl.className = "flex items-center gap-2 text-sm text-green-500 bg-green-500/10 px-4 py-2 rounded-full border border-green-500/20 transition-opacity duration-300";
+                    
+                    setTimeout(() => {
+                        statusEl.classList.add('hidden');
+                    }, 2000);
+                } catch (error) {
+                    console.error("Erro ao salvar:", error);
+                    statusEl.innerHTML = '<i class="fas fa-times-circle"></i> Erro ao salvar';
+                    statusEl.className = "flex items-center gap-2 text-sm text-red-500 bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20";
+                }
+            }, 800); 
+        }
+
+        function renderUI() {
+            const container = document.getElementById('tables-container');
+            container.innerHTML = '';
+
+            const icons = {
+                'Acima de Auriosh': '<i class="fas fa-arrow-up text-red-400 mr-2"></i>',
+                'Mesmo Nível': '<i class="fas fa-equals text-yellow-400 mr-2"></i>',
+                'Abaixo de Auriosh': '<i class="fas fa-arrow-down text-green-400 mr-2"></i>'
+            };
+
+            for (const [sectionName, players] of Object.entries(sections)) {
+                const sectionHtml = `
+                    <div class="bg-gray-900 rounded-xl shadow-xl overflow-hidden border border-gray-800">
+                        <div class="px-6 py-4 bg-gray-800 border-b border-gray-700">
+                            <h2 class="text-xl font-bold text-white">${icons[sectionName]} ${sectionName}</h2>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-gray-400 uppercase bg-gray-800/50">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 w-16 text-center">Tier</th>
+                                        <th scope="col" class="px-6 py-3">Adversário</th>
+                                        <th scope="col" class="px-4 py-3 text-center">1x1</th>
+                                        <th scope="col" class="px-4 py-3 text-center">2x2</th>
+                                        <th scope="col" class="px-4 py-3 text-center">3x3</th>
+                                        <th scope="col" class="px-6 py-3 w-1/3">Observações / Dicas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${players.map(p => generateRowHTML(p)).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += sectionHtml;
+            }
+        }
+
+        window.updateStat = function(playerName, mode, statType, change) {
+            if (!currentUser || playerName === 'AURIOSH') return; 
+
+            if (!userData[playerName]) {
+                userData[playerName] = {};
+            }
+            if (typeof userData[playerName][mode] !== 'object') {
+                const oldVal = Number(userData[playerName][mode]) || 0;
+                userData[playerName][mode] = { streak: oldVal, w: oldVal, l: 0 };
+            }
+            
+            let current = userData[playerName][mode][statType] || 0;
+            current += change;
+            
+            if (current < 0) current = 0;
+            
+            if (statType === 'streak' && current > modeGoals[mode]) {
+                current = modeGoals[mode];
+            }
+            
+            userData[playerName][mode][statType] = current;
+            
+            const el = document.getElementById(`score-${playerName}-${mode}-${statType}`);
+            if (el) {
+                if (statType === 'streak') {
+                    el.innerText = `${current}/${modeGoals[mode]}`;
+                    const container = el.parentElement;
+                    if (current >= modeGoals[mode]) {
+                        container.classList.remove('border-gray-700', 'text-gray-300');
+                        container.classList.add('border-green-500/50', 'text-green-400');
+                    } else {
+                        container.classList.add('border-gray-700', 'text-gray-300');
+                        container.classList.remove('border-green-500/50', 'text-green-400');
+                    }
+                } else {
+                    el.innerText = current;
+                }
+            }
+            saveToFirebase();
+        }
+
+        window.changeObs = function(playerName, value) {
+            if (!currentUser || playerName === 'AURIOSH') return; 
+
+            if (!userData[playerName]) {
+                userData[playerName] = {};
+            }
+            userData[playerName]['obs'] = value;
+            saveToFirebase();
+        }
+
+        function generateRowHTML(player) {
+            // Se for o AURIOSH (você), cria uma linha diferenciada de destaque
+            if (player.name === 'AURIOSH') {
+                return `
+                    <tr class="border-b border-gray-800 bg-blue-900/30">
+                        <td class="px-6 py-2 text-center">
+                            <span class="px-2 py-1 rounded text-xs inline-block w-10 ${player.class}">${player.tier}</span>
+                        </td>
+                        <td class="px-6 py-2 font-bold text-blue-400 flex items-center gap-2">
+                            <i class="fas fa-user-ninja"></i>
+                            ${player.name} (Você)
+                        </td>
+                        <td colspan="4" class="px-6 py-2 text-center text-blue-300/80 italic text-sm">
+                            <i class="fas fa-crosshairs mr-1"></i> Este é o seu perfil! Rastreie suas vitórias contra os outros jogadores.
+                        </td>
+                    </tr>
+                `;
+            }
+
+            const safeName = player.name; 
+            const escapedName = safeName.replace(/'/g, "\\'"); 
+            
+            const stats = userData[safeName] || {};
+            
+            const isEditable = !!currentUser;
+            const disabledAttr = isEditable ? '' : 'disabled';
+            const btnClass = isEditable ? 'hover:bg-gray-600 hover:text-white cursor-pointer' : 'opacity-50 cursor-not-allowed';
+            const inputClass = isEditable ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed';
+
+            const modes = ['1x1', '2x2', '3x3'];
+            let countersHtml = '';
+
+            modes.forEach(mode => {
+                let modeData = stats[mode];
+                if (typeof modeData !== 'object') {
+                    modeData = { streak: Number(modeData) || 0, w: Number(modeData) || 0, l: 0 };
+                }
+                const goal = modeGoals[mode];
+                const streak = modeData.streak || 0;
+                const w = modeData.w || 0;
+                const l = modeData.l || 0;
+                const isMax = streak >= goal;
+
+                countersHtml += `
+                    <td class="px-2 py-2 text-center border-l border-gray-800/50">
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="flex items-center gap-1 bg-gray-800 rounded px-1 py-0.5 border ${isMax ? 'border-green-500/50 text-green-400' : 'border-gray-700 text-gray-300'}">
+                                <span class="text-[10px] text-gray-500 font-bold" title="Vitórias Consecutivas">SEQ</span>
+                                <button ${disabledAttr} onclick="updateStat('${escapedName}', '${mode}', 'streak', -1)" class="w-5 h-5 flex items-center justify-center rounded bg-gray-700 ${btnClass}"><i class="fas fa-minus text-[10px]"></i></button>
+                                <span class="text-xs font-bold w-6 text-center" id="score-${safeName}-${mode}-streak">${streak}/${goal}</span>
+                                <button ${disabledAttr} onclick="updateStat('${escapedName}', '${mode}', 'streak', 1)" class="w-5 h-5 flex items-center justify-center rounded bg-gray-700 ${btnClass}"><i class="fas fa-plus text-[10px]"></i></button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-0.5" title="Vitórias Totais">
+                                    <button ${disabledAttr} onclick="updateStat('${escapedName}', '${mode}', 'w', -1)" class="text-gray-600 hover:text-green-400 ${inputClass}"><i class="fas fa-caret-down text-xs"></i></button>
+                                    <span class="text-xs font-bold w-4 text-center text-green-500" id="score-${safeName}-${mode}-w">${w}</span>
+                                    <span class="text-[9px] text-green-700 mr-0.5">V</span>
+                                    <button ${disabledAttr} onclick="updateStat('${escapedName}', '${mode}', 'w', 1)" class="text-gray-600 hover:text-green-400 ${inputClass}"><i class="fas fa-caret-up text-xs"></i></button>
+                                </div>
+                                <div class="flex items-center gap-0.5" title="Derrotas Totais">
+                                    <button ${disabledAttr} onclick="updateStat('${escapedName}', '${mode}', 'l', -1)" class="text-gray-600 hover:text-red-400 ${inputClass}"><i class="fas fa-caret-down text-xs"></i></button>
+                                    <span class="text-xs font-bold w-4 text-center text-red-500" id="score-${safeName}-${mode}-l">${l}</span>
+                                    <span class="text-[9px] text-red-700 mr-0.5">D</span>
+                                    <button ${disabledAttr} onclick="updateStat('${escapedName}', '${mode}', 'l', 1)" class="text-gray-600 hover:text-red-400 ${inputClass}"><i class="fas fa-caret-up text-xs"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                `;
+            });
+
+            return `
+                <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                    <td class="px-6 py-2 text-center">
+                        <span class="px-2 py-1 rounded text-xs inline-block w-10 ${player.class}">${player.tier}</span>
+                    </td>
+                    <td class="px-6 py-2 font-medium text-gray-200">
+                        ${player.name}
+                    </td>
+                    ${countersHtml}
+                    <td class="px-6 py-2">
+                        <input 
+                            type="text" 
+                            id="obs-${safeName}"
+                            value="${stats.obs || ''}"
+                            onkeyup="changeObs('${escapedName}', this.value)"
+                            placeholder="${isEditable ? 'Anote combos, estilo de jogo...' : 'Faça login para anotar'}" 
+                            ${disabledAttr}
+                            class="w-full bg-gray-800/80 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 transition-colors ${inputClass}"
+                        >
+                    </td>
+                </tr>
+            `;
+        }
+
+        function updateUIValues() {
+            for (const player of playersData) {
+                if (player.name === 'AURIOSH') continue; // Pula o update visual de UI se for o jogador principal
+                
+                const safeName = player.name;
+                const stats = userData[safeName] || {};
+                
+                ['1x1', '2x2', '3x3'].forEach(mode => {
+                    let modeData = stats[mode];
+                    if (typeof modeData !== 'object') {
+                        modeData = { streak: Number(modeData) || 0, w: Number(modeData) || 0, l: 0 };
+                    }
+                    
+                    const streakEl = document.getElementById(`score-${safeName}-${mode}-streak`);
+                    if (streakEl) {
+                        streakEl.innerText = `${modeData.streak || 0}/${modeGoals[mode]}`;
+                        const container = streakEl.parentElement;
+                        if ((modeData.streak || 0) >= modeGoals[mode]) {
+                            container.classList.remove('border-gray-700', 'text-gray-300');
+                            container.classList.add('border-green-500/50', 'text-green-400');
+                        } else {
+                            container.classList.add('border-gray-700', 'text-gray-300');
+                            container.classList.remove('border-green-500/50', 'text-green-400');
+                        }
+                    }
+
+                    const wEl = document.getElementById(`score-${safeName}-${mode}-w`);
+                    if (wEl) wEl.innerText = modeData.w || 0;
+
+                    const lEl = document.getElementById(`score-${safeName}-${mode}-l`);
+                    if (lEl) lEl.innerText = modeData.l || 0;
+                });
+
+                const obsEl = document.getElementById(`obs-${safeName}`);
+                if (obsEl && document.activeElement !== obsEl) {
+                    obsEl.value = stats.obs || '';
+                }
+            }
+        }
+    </script>
+</body>
+</html>
