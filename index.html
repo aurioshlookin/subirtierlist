@@ -22,10 +22,10 @@
         ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #666; }
 
-        input[type="text"] {
+        input[type="text"], textarea {
             transition: all 0.3s ease;
         }
-        input[type="text"]:focus {
+        input[type="text"]:focus, textarea:focus {
             outline: none;
             border-color: #3b82f6;
             box-shadow: 0 0 0 1px #3b82f6;
@@ -508,24 +508,23 @@
                 `;
             });
 
-            // Lógica para mostrar input se logado, ou div com texto legível se deslogado
+            // Lógica para mostrar textarea se logado, ou div com texto legível se deslogado
             let obsHtml = '';
             const obsValue = stats.obs || '';
             
             if (isEditable) {
                 obsHtml = `
-                    <input 
-                        type="text" 
+                    <textarea 
                         id="obs-${safeName}"
-                        value="${obsValue}"
                         onkeyup="changeObs('${escapedName}', this.value)"
                         placeholder="Anote combos, estilo de jogo..." 
-                        class="w-full bg-gray-800/80 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 transition-colors"
-                    >
+                        class="w-full bg-gray-800/80 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 transition-colors resize-y min-h-[40px]"
+                        rows="1"
+                    >${obsValue}</textarea>
                 `;
             } else {
                 obsHtml = `
-                    <div id="obs-${safeName}" class="w-full text-gray-400 text-sm p-2 italic truncate max-w-[250px]" title="${obsValue}">
+                    <div id="obs-${safeName}" class="w-full text-gray-400 text-sm p-2 italic break-words whitespace-normal min-w-[200px]">
                         ${obsValue || 'Sem observações'}
                     </div>
                 `;
@@ -582,13 +581,12 @@
 
                 const obsEl = document.getElementById(`obs-${safeName}`);
                 if (obsEl) {
-                    if (obsEl.tagName === 'INPUT') {
+                    if (obsEl.tagName === 'TEXTAREA' || obsEl.tagName === 'INPUT') {
                         if (document.activeElement !== obsEl) {
                             obsEl.value = stats.obs || '';
                         }
                     } else {
                         obsEl.innerText = stats.obs || 'Sem observações';
-                        obsEl.title = stats.obs || '';
                     }
                 }
             }
