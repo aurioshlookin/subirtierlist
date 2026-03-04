@@ -43,7 +43,7 @@
             </div>
             <div class="mt-4 md:mt-0 flex items-center gap-4">
                 <div id="auth-status" class="flex items-center gap-2 text-sm text-yellow-500 bg-yellow-500/10 px-4 py-2 rounded-full border border-yellow-500/20">
-                    <i class="fas fa-spinner fa-spin"></i> Verificando autenticação...
+                    <i class="fas fa-spinner fa-spin"></i> Conectando...
                 </div>
                 <button id="login-btn" onclick="toggleLoginModal(true)" class="hidden text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full transition-colors shadow-lg">
                     <i class="fas fa-sign-in-alt"></i> Entrar
@@ -94,8 +94,8 @@
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Configuração do Firebase
-        const userConfig = {
+        // Configuração do Firebase do USUÁRIO (Forçada para ignorar o banco temporário do ambiente de testes)
+        const firebaseConfig = {
             apiKey: "AIzaSyBeP4HT3i5qdtcQfpWGO2ROH2Nc6qkb8FA",
             authDomain: "subirtierlist.firebaseapp.com",
             projectId: "subirtierlist",
@@ -105,21 +105,22 @@
             measurementId: "G-J076MS3WWC"
         };
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userConfig;
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const envAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        // Caminho fixo para que os dados sejam seus e permanentes, mesmo se você mudar de link
+        const envAppId = 'tierlist-app';
 
         let currentUser = null;
         let userData = {};
         let saveTimeout = null;
+        let dataLoaded = false;
         let isFirstLoad = true;
         let unsubscribeSnapshot = null;
 
         // Estrutura de dados dos jogadores
         const playersData = [
-            // ACIMA
             { section: 'Acima de Auriosh', tier: 'S', class: 'tier-S', name: 'MACIEL' },
             { section: 'Acima de Auriosh', tier: 'S', class: 'tier-S', name: 'SYNESIS' },
             { section: 'Acima de Auriosh', tier: 'S-', class: 'tier-S', name: 'IZUNA' },
@@ -166,19 +167,15 @@
             { section: 'Acima de Auriosh', tier: 'C-', class: 'tier-C', name: 'TAINT' },
             { section: 'Acima de Auriosh', tier: 'C-', class: 'tier-C', name: 'GOJO' },
             { section: 'Acima de Auriosh', tier: 'C-', class: 'tier-C', name: 'ALRIC' },
-
-            // MESMO NÍVEL
             { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'BILBO' },
             { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'THEUZIN' },
             { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'GAUCHO' },
             { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'HAGANETSU' },
-            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'AURIOSH' }, // Adicionado o Auriosh aqui!
+            { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'AURIOSH' },
             { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'RAVENY' },
             { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'GOODNIGHT' },
             { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'IGHI' },
             { section: 'Mesmo Nível', tier: 'D', class: 'tier-D', name: 'HASH' },
-
-            // ABAIXO
             { section: 'Abaixo de Auriosh', tier: 'D-', class: 'tier-D', name: 'SANSHI' },
             { section: 'Abaixo de Auriosh', tier: 'D-', class: 'tier-D', name: 'ITATE UCHIHA' },
             { section: 'Abaixo de Auriosh', tier: 'E', class: 'tier-E', name: 'AIRIY' },
@@ -192,7 +189,7 @@
             { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'PREFEITO' },
             { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'SHISHIO' },
             { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'ASSASSINO' },
-            { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'TUCSON (TEM DOWN)' },
+            { section: 'Abaixo de Auriosh', tier: 'ESP.', class: 'tier-ESP', name: 'TUCSON (TEM DOWN)' }
         ];
 
         const sections = {
@@ -209,7 +206,6 @@
             else modal.classList.add('hidden');
         };
 
-        // Funções de Autenticação (Email/Senha)
         window.handleLogin = async () => {
             const email = document.getElementById('auth-email').value;
             const pass = document.getElementById('auth-password').value;
@@ -267,17 +263,7 @@
         };
 
         window.handleLogout = async () => {
-            if (unsubscribeSnapshot) {
-                unsubscribeSnapshot();
-                unsubscribeSnapshot = null;
-            }
             await signOut(auth);
-            userData = {};
-        };
-
-        // Removido o login automático. O usuário precisará logar manualmente.
-        const initAuth = async () => {
-            // Apenas para inicialização estrutural. Firebase persiste sessão se já existir.
         };
 
         onAuthStateChanged(auth, (user) => {
@@ -292,27 +278,25 @@
                 logoutBtn.classList.remove('hidden');
                 loginBtn.classList.add('hidden');
                 window.toggleLoginModal(false);
-                loadData();
             } else {
-                statusEl.innerHTML = '<i class="fas fa-lock"></i> Somente Leitura';
+                statusEl.innerHTML = '<i class="fas fa-lock"></i> Mural Público (Somente Leitura)';
                 statusEl.className = "flex items-center gap-2 text-sm text-gray-400 bg-gray-800 px-4 py-2 rounded-full border border-gray-700";
                 logoutBtn.classList.add('hidden');
                 loginBtn.classList.remove('hidden');
-                userData = {}; 
-                if (unsubscribeSnapshot) {
-                    unsubscribeSnapshot();
-                    unsubscribeSnapshot = null;
-                }
-                renderUI(); 
+            }
+
+            // Inicia o carregamento de dados incondicionalmente no primeiro carregamento
+            if (!dataLoaded) {
+                loadData();
+                dataLoaded = true;
+            } else {
+                renderUI(); // Re-renderiza a tabela para exibir/esconder campos de edição
             }
         });
 
-        initAuth();
-
+        // O carregamento de dados agora busca do caminho público configurado em SEU banco
         function loadData() {
-            if (!currentUser) return;
-            
-            const docRef = doc(db, 'artifacts', envAppId, 'users', currentUser.uid, 'tracker', 'stats');
+            const docRef = doc(db, 'artifacts', envAppId, 'public', 'data', 'tracker', 'stats');
             
             if (unsubscribeSnapshot) unsubscribeSnapshot();
 
@@ -330,12 +314,12 @@
                     updateUIValues();
                 }
             }, (error) => {
-                console.error("Erro ao escutar dados:", error);
+                console.error("Erro ao escutar dados. Verifique as regras do Firestore.", error);
             });
         }
 
         function saveToFirebase() {
-            if (!currentUser) return;
+            if (!currentUser) return; // Segurança extra no front-end
 
             const statusEl = document.getElementById('save-status');
             statusEl.classList.remove('hidden');
@@ -346,7 +330,7 @@
 
             saveTimeout = setTimeout(async () => {
                 try {
-                    const docRef = doc(db, 'artifacts', envAppId, 'users', currentUser.uid, 'tracker', 'stats');
+                    const docRef = doc(db, 'artifacts', envAppId, 'public', 'data', 'tracker', 'stats');
                     await setDoc(docRef, userData, { merge: true });
                     
                     statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Salvo';
@@ -454,7 +438,6 @@
         }
 
         function generateRowHTML(player) {
-            // Se for o AURIOSH (você), cria uma linha diferenciada de destaque
             if (player.name === 'AURIOSH') {
                 return `
                     <tr class="border-b border-gray-800 bg-blue-900/30">
@@ -479,8 +462,9 @@
             
             const isEditable = !!currentUser;
             const disabledAttr = isEditable ? '' : 'disabled';
-            const btnClass = isEditable ? 'hover:bg-gray-600 hover:text-white cursor-pointer' : 'opacity-50 cursor-not-allowed';
-            const inputClass = isEditable ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed';
+            // A opacidade agora fica em 30% quando deslogado, deixando claro que não é clicável
+            const btnClass = isEditable ? 'hover:bg-gray-600 hover:text-white cursor-pointer' : 'opacity-30 cursor-not-allowed';
+            const inputClass = isEditable ? 'cursor-pointer' : 'opacity-30 cursor-not-allowed';
 
             const modes = ['1x1', '2x2', '3x3'];
             let countersHtml = '';
@@ -524,6 +508,29 @@
                 `;
             });
 
+            // Lógica para mostrar input se logado, ou div com texto legível se deslogado
+            let obsHtml = '';
+            const obsValue = stats.obs || '';
+            
+            if (isEditable) {
+                obsHtml = `
+                    <input 
+                        type="text" 
+                        id="obs-${safeName}"
+                        value="${obsValue}"
+                        onkeyup="changeObs('${escapedName}', this.value)"
+                        placeholder="Anote combos, estilo de jogo..." 
+                        class="w-full bg-gray-800/80 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 transition-colors"
+                    >
+                `;
+            } else {
+                obsHtml = `
+                    <div id="obs-${safeName}" class="w-full text-gray-400 text-sm p-2 italic truncate max-w-[250px]" title="${obsValue}">
+                        ${obsValue || 'Sem observações'}
+                    </div>
+                `;
+            }
+
             return `
                 <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
                     <td class="px-6 py-2 text-center">
@@ -534,15 +541,7 @@
                     </td>
                     ${countersHtml}
                     <td class="px-6 py-2">
-                        <input 
-                            type="text" 
-                            id="obs-${safeName}"
-                            value="${stats.obs || ''}"
-                            onkeyup="changeObs('${escapedName}', this.value)"
-                            placeholder="${isEditable ? 'Anote combos, estilo de jogo...' : 'Faça login para anotar'}" 
-                            ${disabledAttr}
-                            class="w-full bg-gray-800/80 border border-gray-700 text-gray-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 transition-colors ${inputClass}"
-                        >
+                        ${obsHtml}
                     </td>
                 </tr>
             `;
@@ -550,7 +549,7 @@
 
         function updateUIValues() {
             for (const player of playersData) {
-                if (player.name === 'AURIOSH') continue; // Pula o update visual de UI se for o jogador principal
+                if (player.name === 'AURIOSH') continue; 
                 
                 const safeName = player.name;
                 const stats = userData[safeName] || {};
@@ -582,8 +581,15 @@
                 });
 
                 const obsEl = document.getElementById(`obs-${safeName}`);
-                if (obsEl && document.activeElement !== obsEl) {
-                    obsEl.value = stats.obs || '';
+                if (obsEl) {
+                    if (obsEl.tagName === 'INPUT') {
+                        if (document.activeElement !== obsEl) {
+                            obsEl.value = stats.obs || '';
+                        }
+                    } else {
+                        obsEl.innerText = stats.obs || 'Sem observações';
+                        obsEl.title = stats.obs || '';
+                    }
                 }
             }
         }
